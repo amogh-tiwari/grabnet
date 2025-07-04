@@ -34,15 +34,17 @@ from grabnet.tools.utils import aa2rotmat
 from grabnet.tools.utils import makepath
 from grabnet.tools.utils import to_cpu
 
+np.random.seed(42)
 
-def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir = None):
+def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir = None, vis=False):
 
     with torch.no_grad():
         imw, imh = 1920, 780
         cols = len(dorig['bps_object'])
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        mvs = MeshViewers(window_width=imw, window_height=imh, shape=[1, cols], keepalive=True)
+        if vis:
+            mvs = MeshViewers(window_width=imw, window_height=imh, shape=[1, cols], keepalive=True)
 
         drec_cnet = coarse_net.sample_poses(dorig['bps_object'])
         verts_rh_gen_cnet = rh_model(**drec_cnet).vertices
@@ -70,26 +72,28 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
             hand_mesh_gen_cnet = Mesh(v=to_cpu(verts_rh_gen_cnet[cId]), f=rh_model.faces, vc=name_to_rgb['pink'])
             hand_mesh_gen_rnet = Mesh(v=to_cpu(verts_rh_gen_rnet[cId]), f=rh_model.faces, vc=name_to_rgb['gray'])
 
-            if 'rotmat' in dorig:
-                rotmat = dorig['rotmat'][cId].T
-                obj_mesh = obj_mesh.rotate_vertices(rotmat)
-                hand_mesh_gen_cnet.rotate_vertices(rotmat)
-                hand_mesh_gen_rnet.rotate_vertices(rotmat)
+            # if 'rotmat' in dorig:
+            #     rotmat = dorig['rotmat'][cId].T
+            #     obj_mesh = obj_mesh.rotate_vertices(rotmat)
+            #     hand_mesh_gen_cnet.rotate_vertices(rotmat)
+            #     hand_mesh_gen_rnet.rotate_vertices(rotmat)
 
             hand_mesh_gen_cnet.reset_face_normals()
             hand_mesh_gen_rnet.reset_face_normals()
 
-            # mvs[0][cId].set_static_meshes([hand_mesh_gen_cnet] + obj_mesh, blocking=True)
-            mvs[0][cId].set_static_meshes([hand_mesh_gen_rnet,obj_mesh], blocking=True)
+            if vis:
+                # mvs[0][cId].set_static_meshes([hand_mesh_gen_cnet] + obj_mesh, blocking=True)
+                mvs[0][cId].set_static_meshes([hand_mesh_gen_rnet,obj_mesh], blocking=True)
 
             if save:
-                save_path = os.path.join(save_dir, str(cId))
+                save_path = os.path.join(save_dir)
                 makepath(save_path)
-                hand_mesh_gen_rnet.write_ply(filename=save_path + '/rh_mesh_gen_%d.ply' % cId)
-                obj_mesh[0].write_ply(filename=save_path + '/obj_mesh_%d.ply' % cId)
+                hand_mesh_gen_cnet.write_ply(filename=os.path.join(save_path, f'{cId:02d}_rh_mesh_gen_cnet.ply'))
+                hand_mesh_gen_rnet.write_ply(filename=os.path.join(save_path, f'{cId:02d}_rh_mesh_gen_rnet.ply'))
+                obj_mesh.write_ply(filename=os.path.join(save_path, f'{cId:02d}_obj_mesh.ply'))
 
 
-def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1.):
+def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=False, vis=False):
     
     grabnet.coarse_net.eval()
     grabnet.refine_net.eval()
@@ -137,7 +141,7 @@ def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1.):
         dorig['bps_object'] = torch.cat(dorig['bps_object'])
         dorig['verts_object'] = torch.cat(dorig['verts_object'])
 
-        save_dir = os.path.join(grabnet.cfg.work_dir, 'grab_new_objects')
+        save_dir = os.path.join(grabnet.cfg.work_dir, 'grab_new_objects', obj_name.split(".")[0])
         grabnet.logger(f'#################\n'
                               f'                   \n'
                               f'Showing results for the {obj_name.upper()}'
@@ -147,13 +151,13 @@ def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1.):
                     coarse_net=grabnet.coarse_net,
                     refine_net=grabnet.refine_net,
                     rh_model=rh_model,
-                    save=False,
-                    save_dir=save_dir
+                    save=save,
+                    save_dir=save_dir,
+                    vis=vis
                     )
 
 def load_obj_verts(mesh_path, rand_rotmat, rndrotate=True, scale=1., n_sample_verts=10000):
 
-    np.random.seed(100)
     obj_mesh = Mesh(filename=mesh_path, vscale=scale)
 
     obj_mesh.reset_normals()
@@ -212,8 +216,8 @@ if __name__ == '__main__':
     cwd = os.getcwd()
     work_dir = cwd + '/logs'
 
-    best_cnet = 'grabnet/models/coarsenet.pt'
-    best_rnet = 'grabnet/models/refinenet.pt'
+    best_cnet = 'ckpts/coarsenet.pt'
+    best_rnet = 'ckpts/refinenet.pt'
     bps_dir   = 'grabnet/configs/bps.npz'
 
 
@@ -230,6 +234,6 @@ if __name__ == '__main__':
     }
 
     cfg = Config(default_cfg_path=cfg_path, **config)
-
+    cfg.work_dir = os.path.join(cfg.work_dir, cfg.expr_ID)
     grabnet = Tester(cfg=cfg)
-    grab_new_objs(grabnet,obj_path, rot=True, n_samples=10)
+    grab_new_objs(grabnet,obj_path, rot=False, n_samples=10, save=True, vis=False)
