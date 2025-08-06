@@ -17,6 +17,8 @@ import numpy as np
 import torch
 import os
 import argparse
+from pytorch3d.structures import Pointclouds
+from pytorch3d.io import IO
 
 import mano
 from psbody.mesh import MeshViewers, Mesh
@@ -68,9 +70,10 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
                 obj_mesh = meshes[cId]
             except:
                 obj_mesh = points_to_spheres(to_cpu(dorig['verts_object'][cId]), radius=0.002, vc=name_to_rgb['green'])
-
+            
             hand_mesh_gen_cnet = Mesh(v=to_cpu(verts_rh_gen_cnet[cId]), f=rh_model.faces, vc=name_to_rgb['pink'])
             hand_mesh_gen_rnet = Mesh(v=to_cpu(verts_rh_gen_rnet[cId]), f=rh_model.faces, vc=name_to_rgb['gray'])
+            obj_pcd_sampled = Pointclouds(points=[dorig['verts_object'][cId]])
 
             # if 'rotmat' in dorig:
             #     rotmat = dorig['rotmat'][cId].T
@@ -91,9 +94,10 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
                 hand_mesh_gen_cnet.write_ply(filename=os.path.join(save_path, f'{cId:02d}_rh_mesh_gen_cnet.ply'))
                 hand_mesh_gen_rnet.write_ply(filename=os.path.join(save_path, f'{cId:02d}_rh_mesh_gen_rnet.ply'))
                 obj_mesh.write_ply(filename=os.path.join(save_path, f'{cId:02d}_obj_mesh.ply'))
+                IO().save_pointcloud(obj_pcd_sampled, os.path.join(save_path, f'{cId:02d}_obj_pcd_sampled.ply'))
 
 
-def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=False, vis=False):
+def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=False, vis=False, load_mode="load_from_mesh"):
     
     grabnet.coarse_net.eval()
     grabnet.refine_net.eval()
@@ -116,6 +120,7 @@ def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=Fal
     if not isinstance(objs_path, list):
         objs_path = [objs_path]
         
+    verts_sample_id = None
     for new_obj in objs_path:
 
         rand_rotdeg = np.random.random([n_samples, 3]) * np.array([360, 360, 360])
@@ -125,11 +130,12 @@ def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=Fal
                  'verts_object': [],
                  'mesh_object': [],
                  'rotmat':[]}
-
+        
         for samples in range(n_samples):
-
-            verts_obj, mesh_obj, rotmat = load_obj_verts(new_obj, rand_rotmat[samples], rndrotate=rot, scale=scale)
-            
+            # NOTE: rot thing doesn't work unless rndrotate=True is passed; verts_sampled_id is None for first go, and same as last go for subsequent goes.
+            # this ensures that same set of verties are used always when sampling. Change the function definition to change this behaviour.
+            verts_obj, mesh_obj, rotmat, verts_sample_id = load_obj_verts(new_obj, rand_rotmat[samples], rndrotate=rot, scale=scale, verts_sample_id=verts_sample_id)
+                    
             bps_object = bps.encode(torch.from_numpy(verts_obj), feature_type='dists')['dists']
 
             dorig['bps_object'].append(bps_object.to(grabnet.device))
@@ -156,7 +162,7 @@ def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=Fal
                     vis=vis
                     )
 
-def load_obj_verts(mesh_path, rand_rotmat, rndrotate=True, scale=1., n_sample_verts=10000):
+def load_obj_verts(mesh_path, rand_rotmat, rndrotate=True, scale=1., n_sample_verts=2048, verts_sample_id=None):
 
     obj_mesh = Mesh(filename=mesh_path, vscale=scale)
 
@@ -175,6 +181,9 @@ def load_obj_verts(mesh_path, rand_rotmat, rndrotate=True, scale=1., n_sample_ve
     minimum = object_fullpts.min(0, keepdims=True)
 
     offset = ( maximum + minimum) / 2
+
+    if not np.all(offset == 0):
+        breakpoint()
     verts_obj = object_fullpts - offset
     obj_mesh.v = verts_obj
 
@@ -189,10 +198,11 @@ def load_obj_verts(mesh_path, rand_rotmat, rndrotate=True, scale=1., n_sample_ve
         obj_mesh = Mesh(v=mesh.vertices, f = mesh.faces, vc=name_to_rgb['green'])
 
     verts_obj = obj_mesh.v
-    verts_sample_id = np.random.choice(verts_obj.shape[0], n_sample_verts, replace=False)
+    if verts_sample_id is None:
+        verts_sample_id = np.random.choice(verts_obj.shape[0], n_sample_verts, replace=False)
     verts_sampled = verts_obj[verts_sample_id]
 
-    return verts_sampled, obj_mesh, rand_rotmat
+    return verts_sampled, obj_mesh, rand_rotmat, verts_sample_id
 
 if __name__ == '__main__':
 
@@ -214,7 +224,7 @@ if __name__ == '__main__':
     rhm_path = args.rhm_path
 
     cwd = os.getcwd()
-    work_dir = cwd + '/logs'
+    work_dir = 'logs'
 
     best_cnet = 'ckpts/coarsenet.pt'
     best_rnet = 'ckpts/refinenet.pt'
@@ -236,4 +246,4 @@ if __name__ == '__main__':
     cfg = Config(default_cfg_path=cfg_path, **config)
     cfg.work_dir = os.path.join(cfg.work_dir, cfg.expr_ID)
     grabnet = Tester(cfg=cfg)
-    grab_new_objs(grabnet,obj_path, rot=False, n_samples=10, save=True, vis=False)
+    grab_new_objs(grabnet,obj_path, rot=False, n_samples=1, save=True, vis=False, load_mode="load_from_mesh")
