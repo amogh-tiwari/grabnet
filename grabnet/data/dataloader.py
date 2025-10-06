@@ -30,14 +30,17 @@ class LoadData(data.Dataset):
                  ds_name='train',
                  dtype=torch.float32,
                  only_params = False,
-                 load_on_ram = False):
+                 load_on_ram = False,
+                 return_addnl_data=True):
 
         super().__init__()
+
+        self.return_addnl_data = return_addnl_data
 
         self.only_params = only_params
 
         self.ds_path = os.path.join(dataset_dir, ds_name)
-        self.ds = self._np2torch(os.path.join(self.ds_path,'grabnet_%s.npz'%ds_name))
+        self.ds = self._np2torch(os.path.join(self.ds_path,'grabnet_%s.npz'%ds_name), return_addnl_data=False)
 
         frame_names = np.load(os.path.join(dataset_dir,ds_name, 'frame_names.npz'))['frame_names']
         self.frame_names =np.asarray([os.path.join(dataset_dir, fname) for fname in frame_names])
@@ -67,14 +70,22 @@ class LoadData(data.Dataset):
             self.ds = self[:]
             self.load_on_ram = True
 
-    def _np2torch(self,ds_path):
+    def _np2torch(self,ds_path, return_addnl_data=False):
         data = np.load(ds_path, allow_pickle=True)
         data_torch = {k:torch.tensor(data[k]) for k in data.files}
+
+        if return_addnl_data == True:
+            ds_path_addnl = ds_path.replace("grabnet_extract/data/", "grabnet_processing/uni3d_embeds/")
+            addnl_data = np.load(ds_path_addnl)
+            # data_torch['verts_object_10000'] = torch.tensor(addnl_data['verts_object'])
+            data_torch['bps_object'] = torch.tensor(addnl_data['embed_object_uni3d_b_ensembled'])
+
         return data_torch
+    
     def load_disk(self,idx):
 
         if isinstance(idx, int):
-            return self._np2torch(self.frame_names[idx])
+            return self._np2torch(self.frame_names[idx], return_addnl_data=self.return_addnl_data)
 
         frame_names = self.frame_names[idx]
         from_disk = []

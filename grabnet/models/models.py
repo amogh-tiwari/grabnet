@@ -66,7 +66,7 @@ class CoarseNet(nn.Module):
     def __init__(self,
                  n_neurons = 512,
                  latentD = 16,
-                 in_bps = 4096,
+                 in_bps = 1024,
                  in_pose = 12,
                  **kwargs):
 
