@@ -26,7 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--data-path', default=None, type=str,
                         help='The path to the folder that contains GrabNet data')
 
-    parser.add_argument('--rhm-path', default=None, type=str,
+    parser.add_argument('--rhm-path', default='./assets/MANO_RIGHT.pkl', type=str,
                         help='The path to the folder containing MANO_RIHGT model')
 
     parser.add_argument('--config-path', default=None, type=str,
@@ -40,33 +40,34 @@ if __name__ == '__main__':
 
     cwd = os.getcwd()
 
-    best_cnet = 'ckpts/coarsenet.pt'
-    best_rnet = 'ckpts/refinenet.pt'
+    # best_cnet = 'ckpts/coarsenet.pt'
+    # best_rnet = 'ckpts/refinenet.pt'
     vpe_path = 'grabnet/configs/verts_per_edge.npy'
     c_weights_path = 'grabnet/configs/rhand_weight.npy'
-    work_dir = cwd + '/eval'
+    # work_dir = cwd + '/eval'
 
     if cfg_path is None:
         cfg_path = 'grabnet/configs/grabnet_cfg.yaml'
 
 
     config = {
-        'work_dir':work_dir,
+        # 'work_dir':work_dir,
         'vpe_path': vpe_path,
         'c_weights_path': c_weights_path,
 
     }
 
     cfg = Config(default_cfg_path=cfg_path, **config)
+    cfg['work_dir'] = os.path.join(cfg['work_dir'], 'eval')
 
     if data_path is not None:
         cfg['dataset_dir'] = data_path
     if rhm_path is not None:
         cfg['rhm_path'] = rhm_path
-    if cfg.best_cnet is  None:
-        cfg['best_cnet'] = best_cnet
-    if cfg.best_rnet is None:
-        cfg['best_rnet'] = best_rnet
+    # if cfg.best_cnet is  None:
+    #     cfg['best_cnet'] = best_cnet
+    # if cfg.best_rnet is None:
+    #     cfg['best_rnet'] = best_rnet
 
     grabnet_trainer = Trainer(cfg=cfg)
 

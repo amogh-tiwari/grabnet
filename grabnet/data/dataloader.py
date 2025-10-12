@@ -75,10 +75,14 @@ class LoadData(data.Dataset):
         data_torch = {k:torch.tensor(data[k]) for k in data.files}
 
         if return_addnl_data == True:
-            ds_path_addnl = ds_path.replace("grabnet_extract/data/", "grabnet_processing/uni3d_embeds/")
+            # ds_path_addnl = ds_path.replace("grabnet_extract/data/", "grabnet_processing/uni3d_embeds/")
+            # addnl_data = np.load(ds_path_addnl)
+            # # data_torch['verts_object_10000'] = torch.tensor(addnl_data['verts_object'])
+            # data_torch['bps_object'] = torch.tensor(addnl_data['embed_object_uni3d_b_ensembled'])
+
+            ds_path_addnl = ds_path.replace("grabnet_extract/data/", "grabnet_processing/embeds_ours_128_raw/")
             addnl_data = np.load(ds_path_addnl)
-            # data_torch['verts_object_10000'] = torch.tensor(addnl_data['verts_object'])
-            data_torch['bps_object'] = torch.tensor(addnl_data['embed_object_uni3d_b_ensembled'])
+            data_torch['bps_object'] = torch.tensor(addnl_data['model_epoch_5000'])
 
         return data_torch
     

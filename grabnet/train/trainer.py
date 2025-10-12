@@ -35,6 +35,7 @@ from torch.utils.data import DataLoader
 from pytorch3d.structures import Meshes
 from tensorboardX import SummaryWriter
 
+from tqdm import tqdm
 
 class Trainer:
 
@@ -157,7 +158,7 @@ class Trainer:
         ds_test = LoadData(dataset_dir=cfg.dataset_dir, ds_name=ds_name)
         self.data_info[ds_name]['frame_names'] = ds_test.frame_names
         self.data_info[ds_name]['frame_sbjs'] = ds_test.frame_sbjs
-        self.ds_test = DataLoader(ds_test, batch_size=cfg.batch_size, shuffle=True, drop_last=True)
+        self.ds_test = DataLoader(ds_test, **kwargs)
 
         if not inference:
             ds_name = 'train'
@@ -404,7 +405,7 @@ class Trainer:
         prev_lr_cnet = np.inf
         prev_lr_rnet = np.inf
         self.fit_cnet = True
-        self.fit_rnet = True
+        self.fit_rnet = False
 
         lr_scheduler_cnet = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer_cnet, 'min')
         lr_scheduler_rnet = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer_rnet, 'min')
@@ -511,12 +512,13 @@ class Trainer:
 
         total_error_cnet = {}
         total_error_rnet = {}
-        for split, ds in [('val', self.ds_val), ('test', self.ds_test), ('train', self.ds_train)]:
+        # for split, ds in [('val', self.ds_val), ('test', self.ds_test), ('train', self.ds_train)]:
+        for split, ds in [('test', self.ds_test)]:
 
             mean_error_cnet = []
             mean_error_rnet = []
             with torch.no_grad():
-                for dorig in ds:
+                for dorig in tqdm(ds, desc="Evaluating GrabNet Predictions"):
 
                     dorig = {k: dorig[k].to(self.device) for k in dorig.keys()}
 

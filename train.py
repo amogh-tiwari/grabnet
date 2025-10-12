@@ -103,7 +103,8 @@ if __name__ == '__main__':
     cfg = Config(default_cfg_path=default_cfg_path, **cfg)
     grabnet_trainer = Trainer(cfg=cfg)
 
+    cfg.write_cfg(os.path.join(work_dir, 'TR%02d_prefit_%s' % (cfg.try_num, os.path.basename(default_cfg_path))))
     grabnet_trainer.fit()
 
     cfg = grabnet_trainer.cfg
-    cfg.write_cfg(os.path.join(work_dir, 'TR%02d_%s' % (cfg.try_num, os.path.basename(default_cfg_path))))
+    cfg.write_cfg(os.path.join(work_dir, 'TR%02d_postfit_%s' % (cfg.try_num, os.path.basename(default_cfg_path))))
