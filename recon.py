@@ -19,8 +19,10 @@ cfg = {
     'data_dir': '/scratch/clear/atiwari/datasets/grabnet_extract/data',
     'params_fp': '/scratch/clear/atiwari/datasets/grabnet_extract/data/test/grabnet_test.npz',
     'frame_names_fp': '/scratch/clear/atiwari/datasets/grabnet_extract/data/test/frame_names.npz',
-    'best_cnet': 'ckpts/coarsenet.pt',
-    'best_rnet': 'ckpts/refinenet.pt',
+    # 'best_cnet': 'ckpts/coarsenet.pt',
+    'best_cnet': 'logs/V03_our_embeds/snapshots/TR00_E012_cnet.pt',
+    # 'best_rnet': 'ckpts/refinenet.pt',
+    'best_rnet': 'logs/V02_uni3d_embeds/snapshots/TR00_E014_rnet.pt',
     'device': 'cuda:0',
     'dtype': torch.float32,
     'mano_path': './assets/MANO_RIGHT.pkl',
@@ -80,7 +82,11 @@ in_fps = []
 for idx in idxs:
     frame_full_path = os.path.join(cfg.data_dir, frame_names[idx])
     frame_info = np.load(frame_full_path)
-    bps_object.append(frame_info['bps_object'])
+    ds_path_addnl = frame_full_path.replace("grabnet_extract/data/", "grabnet_processing/embeds_ours_128_raw/")
+    addnl_data = np.load(ds_path_addnl)
+    
+    # bps_object.append(frame_info['bps_object'])
+    bps_object.append(addnl_data['model_epoch_5000'])
     verts_object.append(frame_info['verts_object'])
     obj_name = frame_full_path.split("/")[-2].split("_")[0]
     in_fps.append(os.path.join(cfg['obj_meshes_root'], obj_name + ".ply"))
