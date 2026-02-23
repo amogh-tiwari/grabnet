@@ -35,14 +35,15 @@ from grabnet.tools.utils import makepath
 from grabnet.tools.utils import to_cpu
 
 
-def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir = None):
+def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir = None, vis=False):
 
     with torch.no_grad():
         imw, imh = 1920, 780
         cols = len(dorig['bps_object'])
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-        mvs = MeshViewers(window_width=imw, window_height=imh, shape=[1, cols], keepalive=True)
+        
+        if vis:
+            mvs = MeshViewers(window_width=imw, window_height=imh, shape=[1, cols], keepalive=True)
 
         drec_cnet = coarse_net.sample_poses(dorig['bps_object'])
         verts_rh_gen_cnet = rh_model(**drec_cnet).vertices
@@ -79,17 +80,18 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
             hand_mesh_gen_cnet.reset_face_normals()
             hand_mesh_gen_rnet.reset_face_normals()
 
-            # mvs[0][cId].set_static_meshes([hand_mesh_gen_cnet] + obj_mesh, blocking=True)
-            mvs[0][cId].set_static_meshes([hand_mesh_gen_rnet,obj_mesh], blocking=True)
+            if vis:
+                # mvs[0][cId].set_static_meshes([hand_mesh_gen_cnet] + obj_mesh, blocking=True)
+                mvs[0][cId].set_static_meshes([hand_mesh_gen_rnet,obj_mesh], blocking=True)
 
             if save:
                 save_path = os.path.join(save_dir, str(cId))
                 makepath(save_path)
                 hand_mesh_gen_rnet.write_ply(filename=save_path + '/rh_mesh_gen_%d.ply' % cId)
-                obj_mesh[0].write_ply(filename=save_path + '/obj_mesh_%d.ply' % cId)
+                obj_mesh.write_ply(filename=save_path + '/obj_mesh_%d.ply' % cId)
 
 
-def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1.):
+def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=True):
     
     grabnet.coarse_net.eval()
     grabnet.refine_net.eval()
@@ -147,7 +149,7 @@ def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1.):
                     coarse_net=grabnet.coarse_net,
                     refine_net=grabnet.refine_net,
                     rh_model=rh_model,
-                    save=False,
+                    save=save,
                     save_dir=save_dir
                     )
 
@@ -212,8 +214,8 @@ if __name__ == '__main__':
     cwd = os.getcwd()
     work_dir = cwd + '/logs'
 
-    best_cnet = 'grabnet/models/coarsenet.pt'
-    best_rnet = 'grabnet/models/refinenet.pt'
+    best_cnet = 'ckpts/coarsenet.pt'
+    best_rnet = 'ckpts/refinenet.pt'
     bps_dir   = 'grabnet/configs/bps.npz'
 
 
