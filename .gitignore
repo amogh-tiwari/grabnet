@@ -4,3 +4,4 @@ eval
 logs
 oar_scripts/*stderr*
 oar_scripts/*stdout*
+MANO_RIGHT.pkl
