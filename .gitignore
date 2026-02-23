@@ -1,0 +1,6 @@
+ckpts
+eval
+**__pycache__**
+logs
+oar_scripts/*stderr*
+oar_scripts/*stdout*
