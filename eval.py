@@ -40,8 +40,10 @@ if __name__ == '__main__':
 
     cwd = os.getcwd()
 
-    best_cnet = 'grabnet/models/coarsenet.pt'
-    best_rnet = 'grabnet/models/refinenet.pt'
+    # best_cnet = 'grabnet/models/coarsenet.pt'
+    best_cnet = 'ckpts/coarsenet.pt'
+    # best_rnet = 'grabnet/models/refinenet.pt'
+    best_rnet = 'ckpts/refinenet.pt'
     vpe_path = 'grabnet/configs/verts_per_edge.npy'
     c_weights_path = 'grabnet/configs/rhand_weight.npy'
     work_dir = cwd + '/eval'
@@ -70,4 +72,5 @@ if __name__ == '__main__':
 
     grabnet_trainer = Trainer(cfg=cfg)
 
-    grabnet_trainer.eval()
+    eval_result = grabnet_trainer.eval()
+    print(f"Eval result: ", eval_result)

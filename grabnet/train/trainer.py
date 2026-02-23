@@ -35,6 +35,7 @@ from torch.utils.data import DataLoader
 from pytorch3d.structures import Meshes
 from tensorboardX import SummaryWriter
 
+from tqdm import tqdm
 
 class Trainer:
 
@@ -511,12 +512,13 @@ class Trainer:
 
         total_error_cnet = {}
         total_error_rnet = {}
-        for split, ds in [('val', self.ds_val), ('test', self.ds_test), ('train', self.ds_train)]:
+        # for split, ds in [('val', self.ds_val), ('test', self.ds_test), ('train', self.ds_train)]:
+        for split, ds in [('test', self.ds_test)]:
 
             mean_error_cnet = []
             mean_error_rnet = []
             with torch.no_grad():
-                for dorig in ds:
+                for dorig in tqdm(ds):
 
                     dorig = {k: dorig[k].to(self.device) for k in dorig.keys()}
 

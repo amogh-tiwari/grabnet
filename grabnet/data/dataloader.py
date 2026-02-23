@@ -45,7 +45,7 @@ class LoadData(data.Dataset):
         self.frame_objs = np.asarray([name.split('/')[-2].split('_')[0] for name in self.frame_names])
 
         self.sbjs = np.unique(self.frame_sbjs)
-        self.obj_info = np.load(os.path.join(dataset_dir, 'obj_info.npy'), allow_pickle=True).item()
+        # self.obj_info = np.load(os.path.join(dataset_dir, 'obj_info.npy'), allow_pickle=True).item()
         self.sbj_info = np.load(os.path.join(dataset_dir, 'sbj_info.npy'), allow_pickle=True).item()
 
         ## bps_torch data
