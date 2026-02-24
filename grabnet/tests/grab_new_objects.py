@@ -68,10 +68,10 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
                 meshes = deepcopy(dorig['mesh_object'])
                 obj_mesh = meshes[cId]
             except:
-                obj_mesh = points_to_spheres(to_cpu(dorig['verts_object'][cId]), radius=0.002, vc=name_to_rgb['green'])
+                obj_mesh = points_to_spheres(to_cpu(dorig['verts_object'][cId]), radius=0.002, vc=name_to_rgb['yellow'])
 
-            hand_mesh_gen_cnet = Mesh(v=to_cpu(verts_rh_gen_cnet[cId]), f=rh_model.faces, vc=name_to_rgb['pink'])
-            hand_mesh_gen_rnet = Mesh(v=to_cpu(verts_rh_gen_rnet[cId]), f=rh_model.faces, vc=name_to_rgb['gray'])
+            hand_mesh_gen_cnet = Mesh(v=to_cpu(verts_rh_gen_cnet[cId]), f=rh_model.faces, vc=name_to_rgb['DeepPink3'])
+            hand_mesh_gen_rnet = Mesh(v=to_cpu(verts_rh_gen_rnet[cId]), f=rh_model.faces, vc=name_to_rgb['pink'])
 
             if 'rotmat' in dorig:
                 rotmat = dorig['rotmat'][cId].T
@@ -87,14 +87,15 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
                 mvs[0][cId].set_static_meshes([hand_mesh_gen_rnet,obj_mesh], blocking=True)
 
             if save:
-                save_path = os.path.join(save_dir, str(cId))
+                save_path = os.path.join(save_dir, f"{cId:03d}")
                 makepath(save_path)
-                hand_mesh_gen_rnet.write_ply(filename=save_path + '/rh_mesh_gen_%d.ply' % cId)
+                hand_mesh_gen_cnet.write_ply(filename=save_path + '/rh_mesh_gen_cnet_%03d.ply' % cId)
+                hand_mesh_gen_rnet.write_ply(filename=save_path + '/rh_mesh_gen_rnet_%03d.ply' % cId)
                 obj_mesh.write_ply(filename=save_path + '/obj_mesh_%d.ply' % cId)
 
 
 # def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=True):
-def grab_new_objs(grabnet, object_provider, n_samples=10, save=True):
+def grab_new_objs(grabnet, object_provider, n_samples=10, save=True, save_dir_base=None):
     grabnet.coarse_net.eval()
     grabnet.refine_net.eval()
 
@@ -129,24 +130,25 @@ def grab_new_objs(grabnet, object_provider, n_samples=10, save=True):
         for samples in range(n_samples):
 
             # verts_obj, mesh_obj, rotmat = load_obj_verts(new_obj, rand_rotmat[samples], rndrotate=rot, scale=scale)
-            verts_obj, mesh_obj, rotmat = object_provider.load(obj_data=new_obj, rand_rotmat=rand_rotmat[samples])
 
+            verts_obj, mesh_obj, rotmat = object_provider.load(obj_path_info=new_obj.path_info, rand_rotmat=rand_rotmat[samples])
             bps_object = bps.encode(torch.from_numpy(verts_obj), feature_type='dists')['dists']
 
             dorig['bps_object'].append(bps_object.to(grabnet.device))
             dorig['verts_object'].append(torch.from_numpy(verts_obj.astype(np.float32)).unsqueeze(0))
             dorig['mesh_object'].append(mesh_obj)
             dorig['rotmat'].append(rotmat)
-            # obj_name = os.path.basename(new_obj)
+            obj_name = new_obj.name
 
         dorig['bps_object'] = torch.cat(dorig['bps_object'])
         dorig['verts_object'] = torch.cat(dorig['verts_object'])
-
-        save_dir = os.path.join(grabnet.cfg.work_dir, 'grab_new_objects')
-        # grabnet.logger(f'#################\n'
-        #                       f'                   \n'
-        #                       f'Showing results for the {obj_name.upper()}'
-        #                       f'                      \n')
+        
+        save_dir_base = grabnet.cfg.work_dir if save_dir_base is None else save_dir_base
+        save_dir = os.path.join(save_dir_base, 'grab_new_objects', obj_name)
+        grabnet.logger(f'#################\n'
+                              f'                   \n'
+                              f'Showing results for the {obj_name}'
+                              f'                      \n')
 
         vis_results(dorig=dorig,
                     coarse_net=grabnet.coarse_net,
@@ -214,6 +216,11 @@ class ObjectProvider:
 
     """
 
+    class ProvidedObject:
+        def __init__(self, path_info, obj_name):
+            self.path_info = path_info   # either path string (runtime) or tuple (precomputed)
+            self.name = obj_name
+
     def __init__(self,
                  object_source,
                  source_type,
@@ -229,16 +236,24 @@ class ObjectProvider:
         self.n_sample_verts = n_sample_verts
         self.base_dir = base_dir
 
+        self.objects = []
         # -----------------------------
         # RUNTIME MODE
         # -----------------------------
         if source_type == "runtime":
             if isinstance(object_source, str):
-                self.object_list = [object_source]
+                object_list = [object_source]
             elif isinstance(object_source, list):
-                self.object_list = object_source
+                object_list = object_source
             else:
                 raise ValueError("Unsupported object_source type")
+
+            for obj_path in object_list:
+                full_path = self._resolve_path(obj_path)
+                folder = os.path.basename(os.path.dirname(full_path))
+                file = os.path.splitext(os.path.basename(full_path))[0]
+                name = f"{folder}_{file}"
+                self.objects.append(self.ProvidedObject(path_info=full_path, obj_name=name))
 
         # -----------------------------
         # PRECOMPUTED MODE
@@ -253,33 +268,43 @@ class ObjectProvider:
             if "mesh_transform" not in data or "pcd_transform" not in data:
                 raise ValueError("NPZ file must contain mesh_transform and pcd_transform")
 
-            self.mesh_paths = list(data["mesh_transform"])
-            self.pcd_paths = list(data["pcd_transform"])
+            mesh_paths = list(data["mesh_transform"])
+            pcd_paths = list(data["pcd_transform"])
 
-            if len(self.mesh_paths) != len(self.pcd_paths):
+            if len(mesh_paths) != len(pcd_paths):
                 raise ValueError("Mesh and PCD lists must have same length")
 
-            # self.object_list = list(range(len(self.mesh_paths)))
-            self.object_list = list(zip(self.mesh_paths, self.pcd_paths))
             # Warn about ignored args
             warnings.warn("[ObjectProvider] Warning: rot/scale/n_sample_verts ignored in precomputed mode.")
+
+            # # self.object_list = list(range(len(self.mesh_paths)))
+            # self.object_list = list(zip(self.mesh_paths, self.pcd_paths))
+
+            for mesh_path, pcd_path in zip(mesh_paths, pcd_paths):
+                mesh_path = self._resolve_path(mesh_path)
+                pcd_path = self._resolve_path(pcd_path)
+                folder = os.path.basename(os.path.dirname(mesh_path))
+                file = os.path.splitext(os.path.basename(mesh_path))[0]
+                name = f"{folder}_{file}"
+                self.objects.append(self.ProvidedObject(path_info=(mesh_path, pcd_path), obj_name=name))
+
 
         else:
             raise ValueError("source_type must be 'runtime' or 'precomputed'")
 
     def __iter__(self):
-        for obj_path in self.object_list:
-            yield obj_path
+        for obj in self.objects:
+            yield obj
 
     def __len__(self):
-        return len(self.object_list)
+        return len(self.objects)
 
     def _resolve_path(self, path):
         if self.base_dir is not None:
             path = os.path.join(self.base_dir, path)
         return path
 
-    def load(self, obj_data, rand_rotmat):
+    def load(self, obj_path_info, rand_rotmat):
         """
         Returns:
             verts_obj: (N,3) numpy array
@@ -293,7 +318,7 @@ class ObjectProvider:
         if self.source_type == "runtime":
 
             verts_obj, mesh_obj, rotmat = load_obj_verts(
-                mesh_path=obj_data,
+                mesh_path=obj_path_info,
                 rand_rotmat=rand_rotmat,
                 rndrotate=self.rot,
                 scale=self.scale,
@@ -305,14 +330,14 @@ class ObjectProvider:
         # -----------------------------
         elif self.source_type == "precomputed":
 
-            # idx = obj_data
+            # idx = obj_path_info
 
             # mesh_path = self.mesh_paths[idx]
             # pcd_path = self.pcd_paths[idx]
-            mesh_path, pcd_path = obj_data
+            mesh_path, pcd_path = obj_path_info
 
-            mesh_path = self._resolve_path(mesh_path)
-            pcd_path = self._resolve_path(pcd_path)
+            # mesh_path = self._resolve_path(mesh_path)
+            # pcd_path = self._resolve_path(pcd_path)
 
             mesh_obj = Mesh(filename=mesh_path)
             mesh_obj.reset_normals()
@@ -393,4 +418,4 @@ if __name__ == '__main__':
     # grab_new_objs(grabnet, obj_path, rot=True, n_samples=10)
 
     provider = ObjectProvider(object_source=obj_path, base_dir=args.base_dir, source_type=args.source_type, rot=args.rot, scale=args.scale, n_sample_verts=args.n_sample_verts)
-    grab_new_objs(grabnet, provider, n_samples=args.n_grasps)
+    grab_new_objs(grabnet, provider, n_samples=args.n_grasps, save_dir_base=args.save_dir)
