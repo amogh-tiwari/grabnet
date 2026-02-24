@@ -34,6 +34,8 @@ from grabnet.tools.utils import aa2rotmat
 from grabnet.tools.utils import makepath
 from grabnet.tools.utils import to_cpu
 
+import warnings
+from tqdm import tqdm
 
 def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir = None, vis=False):
 
@@ -92,7 +94,7 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
 
 
 # def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=True):
-def grab_new_objs(grabnet, object_provider, n_samples=10, save=True):    
+def grab_new_objs(grabnet, object_provider, n_samples=10, save=True):
     grabnet.coarse_net.eval()
     grabnet.refine_net.eval()
 
@@ -115,7 +117,7 @@ def grab_new_objs(grabnet, object_provider, n_samples=10, save=True):
     #     objs_path = [objs_path]
         
     # for new_obj in objs_path:
-    for new_obj in object_provider:
+    for new_obj in tqdm(object_provider, total=len(object_provider)):
         rand_rotdeg = np.random.random([n_samples, 3]) * np.array([360, 360, 360])
 
         rand_rotmat = euler(rand_rotdeg)
@@ -127,7 +129,7 @@ def grab_new_objs(grabnet, object_provider, n_samples=10, save=True):
         for samples in range(n_samples):
 
             # verts_obj, mesh_obj, rotmat = load_obj_verts(new_obj, rand_rotmat[samples], rndrotate=rot, scale=scale)
-            verts_obj, mesh_obj, rotmat = object_provider.load(obj_path=new_obj, rand_rotmat=rand_rotmat[samples])
+            verts_obj, mesh_obj, rotmat = object_provider.load(obj_data=new_obj, rand_rotmat=rand_rotmat[samples])
 
             bps_object = bps.encode(torch.from_numpy(verts_obj), feature_type='dists')['dists']
 
@@ -135,16 +137,16 @@ def grab_new_objs(grabnet, object_provider, n_samples=10, save=True):
             dorig['verts_object'].append(torch.from_numpy(verts_obj.astype(np.float32)).unsqueeze(0))
             dorig['mesh_object'].append(mesh_obj)
             dorig['rotmat'].append(rotmat)
-            obj_name = os.path.basename(new_obj)
+            # obj_name = os.path.basename(new_obj)
 
         dorig['bps_object'] = torch.cat(dorig['bps_object'])
         dorig['verts_object'] = torch.cat(dorig['verts_object'])
 
         save_dir = os.path.join(grabnet.cfg.work_dir, 'grab_new_objects')
-        grabnet.logger(f'#################\n'
-                              f'                   \n'
-                              f'Showing results for the {obj_name.upper()}'
-                              f'                      \n')
+        # grabnet.logger(f'#################\n'
+        #                       f'                   \n'
+        #                       f'Showing results for the {obj_name.upper()}'
+        #                       f'                      \n')
 
         vis_results(dorig=dorig,
                     coarse_net=grabnet.coarse_net,
@@ -195,43 +197,134 @@ def load_obj_verts(mesh_path, rand_rotmat, rndrotate=True, scale=1., n_sample_ve
 
 class ObjectProvider:
     """
-    Default provider: loads mesh files using load_obj_verts().
-    Designed so alternative providers (pointcloud, preprocessed, etc.)
-    can subclass this without modifying grab_new_objs().
+    Object provider supporting two regimes:
+
+    1) source_type="precomputed" (Similar to orig. grabnet code)
+       - Loads mesh + pcd paths from NPZ file
+       - Assumes preprocessing already done
+       - No rotation
+       - No scaling
+       - No sampling
+       - Identity rotation returned
+       - Similar to original code
+    2) source_type="runtime" (my addition)
+       - Loads mesh paths from CLI
+       - Uses load_obj_verts()
+       - Applies rotation / scaling / sampling
+
     """
 
     def __init__(self,
-                 object_list,
+                 object_source,
+                 source_type,
                  rot=False,
                  scale=1.,
-                 n_sample_verts=10000):
+                 n_sample_verts=10000, 
+                 base_dir=None
+                 ):
         
-        if not isinstance(object_list, list):
-            object_list = [object_list]
-
-        self.object_list = object_list
+        self.source_type = source_type
         self.rot = rot
         self.scale = scale
         self.n_sample_verts = n_sample_verts
+        self.base_dir = base_dir
+
+        # -----------------------------
+        # RUNTIME MODE
+        # -----------------------------
+        if source_type == "runtime":
+            if isinstance(object_source, str):
+                self.object_list = [object_source]
+            elif isinstance(object_source, list):
+                self.object_list = object_source
+            else:
+                raise ValueError("Unsupported object_source type")
+
+        # -----------------------------
+        # PRECOMPUTED MODE
+        # -----------------------------
+        elif source_type == "precomputed":
+
+            if not (isinstance(object_source, str) and object_source.endswith(".npz")):
+                raise ValueError("Precomputed mode requires an .npz file")
+
+            data = np.load(object_source, allow_pickle=True)
+
+            if "mesh_transform" not in data or "pcd_transform" not in data:
+                raise ValueError("NPZ file must contain mesh_transform and pcd_transform")
+
+            self.mesh_paths = list(data["mesh_transform"])
+            self.pcd_paths = list(data["pcd_transform"])
+
+            if len(self.mesh_paths) != len(self.pcd_paths):
+                raise ValueError("Mesh and PCD lists must have same length")
+
+            # self.object_list = list(range(len(self.mesh_paths)))
+            self.object_list = list(zip(self.mesh_paths, self.pcd_paths))
+            # Warn about ignored args
+            warnings.warn("[ObjectProvider] Warning: rot/scale/n_sample_verts ignored in precomputed mode.")
+
+        else:
+            raise ValueError("source_type must be 'runtime' or 'precomputed'")
 
     def __iter__(self):
         for obj_path in self.object_list:
             yield obj_path
 
-    def load(self, obj_path, rand_rotmat):
+    def __len__(self):
+        return len(self.object_list)
+
+    def _resolve_path(self, path):
+        if self.base_dir is not None:
+            path = os.path.join(self.base_dir, path)
+        return path
+
+    def load(self, obj_data, rand_rotmat):
         """
         Returns:
             verts_obj: (N,3) numpy array
-            mesh_obj:  Mesh object
+            mesh_obj:  Mesh object (or point cloud wrapped as Mesh)
             rotmat:    (3,3) numpy array
         """
-        verts_obj, mesh_obj, rotmat = load_obj_verts(
-            mesh_path=obj_path,
-            rand_rotmat=rand_rotmat,
-            rndrotate=self.rot,
-            scale=self.scale,
-            n_sample_verts=self.n_sample_verts
-        )
+
+        # -----------------------------
+        # RUNTIME MODE
+        # -----------------------------
+        if self.source_type == "runtime":
+
+            verts_obj, mesh_obj, rotmat = load_obj_verts(
+                mesh_path=obj_data,
+                rand_rotmat=rand_rotmat,
+                rndrotate=self.rot,
+                scale=self.scale,
+                n_sample_verts=self.n_sample_verts
+            )
+
+        # -----------------------------
+        # PRECOMPUTED MODE
+        # -----------------------------
+        elif self.source_type == "precomputed":
+
+            # idx = obj_data
+
+            # mesh_path = self.mesh_paths[idx]
+            # pcd_path = self.pcd_paths[idx]
+            mesh_path, pcd_path = obj_data
+
+            mesh_path = self._resolve_path(mesh_path)
+            pcd_path = self._resolve_path(pcd_path)
+
+            mesh_obj = Mesh(filename=mesh_path)
+            mesh_obj.reset_normals()
+
+            pcd_mesh = Mesh(filename=pcd_path)
+            verts_obj = pcd_mesh.v.astype(np.float32)
+
+            rotmat = np.eye(3)
+
+        else:
+            raise ValueError("self.source_type must be 'runtime' or 'precomputed'")
+
         return verts_obj, mesh_obj, rotmat
 
 if __name__ == '__main__':
@@ -241,6 +334,12 @@ if __name__ == '__main__':
     parser.add_argument('--obj-path', required = True, type=str,
                         help='The path to the 3D object Mesh or Pointcloud')
 
+    parser.add_argument('--source-type', choices=["runtime", "precomputed"],
+                    help="runtime = preprocess on the fly, precomputed = load from npz")
+
+    parser.add_argument('--base-dir', default = None, type=str,
+                        help='base directory (to be prepended to object paths) -- useful in precomptued mode, when loading paths from file')
+    
     parser.add_argument('--rhm-path', required = True, type=str,
                         help='The path to the folder containing MANO_RIHGT model')
 
@@ -257,7 +356,10 @@ if __name__ == '__main__':
                         help='Number of sampled object vertices. Default: 10000')
     
     parser.add_argument('--n-grasps', default=10, type=int,
-                        help='Number of grasps to sample per object. Default: 10')
+                        help='Number of grasps to sample per object. Default: 10') # Might be irrelevant if randrot is False
+
+    parser.add_argument('--save-dir', default=None,
+                        help="Path to save directory. If none, custom value set below")
     
     args = parser.parse_args()
 
@@ -290,5 +392,5 @@ if __name__ == '__main__':
     grabnet = Tester(cfg=cfg)
     # grab_new_objs(grabnet, obj_path, rot=True, n_samples=10)
 
-    provider = ObjectProvider(object_list=obj_path, rot=args.rot, scale=args.scale, n_sample_verts=args.n_sample_verts)
+    provider = ObjectProvider(object_source=obj_path, base_dir=args.base_dir, source_type=args.source_type, rot=args.rot, scale=args.scale, n_sample_verts=args.n_sample_verts)
     grab_new_objs(grabnet, provider, n_samples=args.n_grasps)
