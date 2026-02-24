@@ -91,8 +91,8 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
                 obj_mesh.write_ply(filename=save_path + '/obj_mesh_%d.ply' % cId)
 
 
-def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=True):
-    
+# def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=True):
+def grab_new_objs(grabnet, object_provider, n_samples=10, save=True):    
     grabnet.coarse_net.eval()
     grabnet.refine_net.eval()
 
@@ -111,11 +111,11 @@ def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=Tru
 
     bps = bps_torch(custom_basis = grabnet.bps)
 
-    if not isinstance(objs_path, list):
-        objs_path = [objs_path]
+    # if not isinstance(objs_path, list):
+    #     objs_path = [objs_path]
         
-    for new_obj in objs_path:
-
+    # for new_obj in objs_path:
+    for new_obj in object_provider:
         rand_rotdeg = np.random.random([n_samples, 3]) * np.array([360, 360, 360])
 
         rand_rotmat = euler(rand_rotdeg)
@@ -126,8 +126,9 @@ def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=Tru
 
         for samples in range(n_samples):
 
-            verts_obj, mesh_obj, rotmat = load_obj_verts(new_obj, rand_rotmat[samples], rndrotate=rot, scale=scale)
-            
+            # verts_obj, mesh_obj, rotmat = load_obj_verts(new_obj, rand_rotmat[samples], rndrotate=rot, scale=scale)
+            verts_obj, mesh_obj, rotmat = object_provider.load(obj_path=new_obj, rand_rotmat=rand_rotmat[samples])
+
             bps_object = bps.encode(torch.from_numpy(verts_obj), feature_type='dists')['dists']
 
             dorig['bps_object'].append(bps_object.to(grabnet.device))
@@ -192,6 +193,47 @@ def load_obj_verts(mesh_path, rand_rotmat, rndrotate=True, scale=1., n_sample_ve
 
     return verts_sampled, obj_mesh, rand_rotmat
 
+class ObjectProvider:
+    """
+    Default provider: loads mesh files using load_obj_verts().
+    Designed so alternative providers (pointcloud, preprocessed, etc.)
+    can subclass this without modifying grab_new_objs().
+    """
+
+    def __init__(self,
+                 object_list,
+                 rot=True,
+                 scale=1.,
+                 n_sample_verts=10000):
+        
+        if not isinstance(object_list, list):
+            object_list = [object_list]
+
+        self.object_list = object_list
+        self.rot = rot
+        self.scale = scale
+        self.n_sample_verts = n_sample_verts
+
+    def __iter__(self):
+        for obj_path in self.object_list:
+            yield obj_path
+
+    def load(self, obj_path, rand_rotmat):
+        """
+        Returns:
+            verts_obj: (N,3) numpy array
+            mesh_obj:  Mesh object
+            rotmat:    (3,3) numpy array
+        """
+        verts_obj, mesh_obj, rotmat = load_obj_verts(
+            mesh_path=obj_path,
+            rand_rotmat=rand_rotmat,
+            rndrotate=self.rot,
+            scale=self.scale,
+            n_sample_verts=self.n_sample_verts
+        )
+        return verts_obj, mesh_obj, rotmat
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='GrabNet-Testing')
@@ -234,4 +276,7 @@ if __name__ == '__main__':
     cfg = Config(default_cfg_path=cfg_path, **config)
 
     grabnet = Tester(cfg=cfg)
-    grab_new_objs(grabnet,obj_path, rot=True, n_samples=10)
+    # grab_new_objs(grabnet, obj_path, rot=True, n_samples=10)
+
+    provider = ObjectProvider(object_list=obj_path, rot=True, scale=1., n_sample_verts=10000)
+    grab_new_objs(grabnet, provider, n_samples=10)
