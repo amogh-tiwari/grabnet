@@ -1,7 +1,9 @@
 ckpts
 eval
-**__pycache__**
 logs
+MANO_RIGHT.pkl
 oar_scripts/*stderr*
 oar_scripts/*stdout*
-MANO_RIGHT.pkl
+outputs
+**__pycache__**
+
