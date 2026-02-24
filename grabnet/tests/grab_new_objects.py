@@ -202,7 +202,7 @@ class ObjectProvider:
 
     def __init__(self,
                  object_list,
-                 rot=True,
+                 rot=False,
                  scale=1.,
                  n_sample_verts=10000):
         
@@ -247,6 +247,18 @@ if __name__ == '__main__':
     parser.add_argument('--config-path', default= None, type=str,
                         help='The path to the confguration of the trained GrabNet model')
 
+    parser.add_argument('--rot', default=0, choices=[0, 1], type=int, 
+                        help='Apply random rotation (1=True, 0=False). Default: 0')
+
+    parser.add_argument('--scale', default=1.0, type=float, 
+                        help='Object scaling factor. Default: 1.0')
+
+    parser.add_argument('--n-sample-verts', default=10000, type=int,
+                        help='Number of sampled object vertices. Default: 10000')
+    
+    parser.add_argument('--n-grasps', default=10, type=int,
+                        help='Number of grasps to sample per object. Default: 10')
+    
     args = parser.parse_args()
 
     cfg_path = args.config_path
@@ -278,5 +290,5 @@ if __name__ == '__main__':
     grabnet = Tester(cfg=cfg)
     # grab_new_objs(grabnet, obj_path, rot=True, n_samples=10)
 
-    provider = ObjectProvider(object_list=obj_path, rot=True, scale=1., n_sample_verts=10000)
-    grab_new_objs(grabnet, provider, n_samples=10)
+    provider = ObjectProvider(object_list=obj_path, rot=args.rot, scale=args.scale, n_sample_verts=args.n_sample_verts)
+    grab_new_objs(grabnet, provider, n_samples=args.n_grasps)
