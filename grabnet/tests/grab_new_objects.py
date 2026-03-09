@@ -91,7 +91,7 @@ def vis_results(dorig, coarse_net, refine_net, rh_model , save=False, save_dir =
                 makepath(save_path)
                 hand_mesh_gen_cnet.write_ply(filename=save_path + '/rh_mesh_gen_cnet_%03d.ply' % cId)
                 hand_mesh_gen_rnet.write_ply(filename=save_path + '/rh_mesh_gen_rnet_%03d.ply' % cId)
-                obj_mesh.write_ply(filename=save_path + '/obj_mesh_%d.ply' % cId)
+                obj_mesh.write_ply(filename=save_path + '/obj_mesh_%03d.ply' % cId)
 
 
 # def grab_new_objs(grabnet, objs_path, rot=True, n_samples=10, scale=1., save=True):
