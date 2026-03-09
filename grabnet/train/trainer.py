@@ -14,8 +14,9 @@
 import os
 import shutil
 import sys
-sys.path.append('.')
-sys.path.append('..')
+# sys.path.append('.')
+# sys.path.append('..')
+sys.path.append('../object_manipulation/')
 import json
 import numpy as np
 import torch
@@ -26,7 +27,8 @@ from datetime import datetime
 from grabnet.tools.utils import makepath, makelogger, to_cpu
 from grabnet.tools.train_tools import EarlyStopping
 from grabnet.models.models import CoarseNet, RefineNet
-from grabnet.data.dataloader import LoadData
+# from grabnet.data.dataloader import LoadData
+from object_manipulation.data.data_utils import get_dataset
 from grabnet.tools.train_tools import point2point_signed
 
 from torch import nn, optim
@@ -155,32 +157,35 @@ class Trainer:
 
         ds_name = 'test'
         self.data_info[ds_name] = {}
-        ds_test = LoadData(dataset_dir=cfg.dataset_dir, ds_name=ds_name)
+        # ds_test = LoadData(dataset_dir=cfg.dataset_dir, ds_name=ds_name)
+        ds_test = get_dataset(dataset_name=cfg.dataset_name, split=ds_name, read_processed=True)
         self.data_info[ds_name]['frame_names'] = ds_test.frame_names
-        self.data_info[ds_name]['frame_sbjs'] = ds_test.frame_sbjs
+        # self.data_info[ds_name]['frame_sbjs'] = ds_test.frame_sbjs
         self.ds_test = DataLoader(ds_test, batch_size=cfg.batch_size, shuffle=True, drop_last=True)
 
         if not inference:
             ds_name = 'train'
             self.data_info[ds_name] = {}
-            ds_train = LoadData(dataset_dir=cfg.dataset_dir, ds_name=ds_name, load_on_ram=cfg.load_on_ram)
+            # ds_train = LoadData(dataset_dir=cfg.dataset_dir, ds_name=ds_name, load_on_ram=cfg.load_on_ram)
+            ds_train = get_dataset(dataset_name=cfg.dataset_name, split=ds_name, load_on_ram=cfg.load_on_ram, read_processed=True)
             self.data_info[ds_name]['frame_names'] = ds_train.frame_names
-            self.data_info[ds_name]['frame_sbjs'] = ds_train.frame_sbjs
-            self.data_info['hand_vtmp'] = ds_train.sbj_vtemp
-            self.data_info['hand_betas'] = ds_train.sbj_betas
+            # self.data_info[ds_name]['frame_sbjs'] = ds_train.frame_sbjs
+            # self.data_info['hand_vtmp'] = ds_train.sbj_vtemp
+            # self.data_info['hand_betas'] = ds_train.sbj_betas
             self.ds_train = DataLoader(ds_train, **kwargs)
 
             ds_name = 'val'
             self.data_info[ds_name] = {}
-            ds_val = LoadData(dataset_dir=cfg.dataset_dir, ds_name=ds_name, load_on_ram=cfg.load_on_ram)
-            self.data_info[ds_name]['frame_names'] = ds_val.frame_names
-            self.data_info[ds_name]['frame_sbjs'] = ds_val.frame_sbjs
+            # ds_val = LoadData(dataset_dir=cfg.dataset_dir, ds_name=ds_name, load_on_ram=cfg.load_on_ram)
+            ds_val = get_dataset(dataset_name=cfg.dataset_name, split=ds_name, load_on_ram=cfg.load_on_ram, read_processed=True)
+            # self.data_info[ds_name]['frame_names'] = ds_val.frame_names
+            # self.data_info[ds_name]['frame_sbjs'] = ds_val.frame_sbjs
             self.ds_val = DataLoader(ds_val, **kwargs)
 
             self.logger('Dataset Train, Vald, Test size respectively: %.2f M, %.2f K, %.2f K' %
                    (len(self.ds_train.dataset) * 1e-6, len(self.ds_val.dataset) * 1e-3, len(self.ds_test.dataset) * 1e-3))
 
-        self.bps = ds_test.bps
+        # self.bps = ds_test.bps
         self.n_obj_verts = ds_test[0]['verts_object'].shape[0]
 
     def edges_for(self, x, vpe):

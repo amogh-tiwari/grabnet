@@ -26,7 +26,10 @@ if __name__ == '__main__':
     parser.add_argument('--work-dir', required=True, type=str,
                         help='The path to the downloaded grab data')
 
-    parser.add_argument('--data-path', required=True, type=str,
+    parser.add_argument('--data-path', required=False, type=str,
+                        help='The path to the folder that contains GrabNet data')
+
+    parser.add_argument('--data-name', choices=['grab', 'obman'], default='grab', type=str,
                         help='The path to the folder that contains GrabNet data')
 
     parser.add_argument('--rhm-path', required=True, type=str,
@@ -61,6 +64,7 @@ if __name__ == '__main__':
 
     work_dir = args.work_dir
     data_path = args.data_path
+    data_name = args.data_name
     rhm_path = args.rhm_path
     expr_ID = args.expr_ID
     batch_size = args.batch_size
@@ -85,7 +89,8 @@ if __name__ == '__main__':
 
         'kl_coef': kl_coef,
 
-        'dataset_dir': data_path,
+        # 'dataset_dir': data_path,
+        'dataset_name': data_name,
         'rhm_path': rhm_path,
         'vpe_path': vpe_path,
         'c_weights_path': c_weights_path,
